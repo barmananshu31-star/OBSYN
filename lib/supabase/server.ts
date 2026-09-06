@@ -7,6 +7,7 @@ import { createClient } from "@supabase/supabase-js";
  * and user-scoped server queries.
  *
  * Guarded with 'server-only' to ensure this key is NEVER bundled into client-side JS.
+ * Includes a resilient 4-second network timeout to prevent SSR streaming hangs on cold starts.
  */
 export function getServiceRoleClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -22,6 +23,14 @@ export function getServiceRoleClient() {
     auth: {
       persistSession: false,
       autoRefreshToken: false,
+    },
+    global: {
+      fetch: (url, options = {}) => {
+        return fetch(url, {
+          ...options,
+          signal: AbortSignal.timeout(4000), // Prevent Vercel function timeout
+        });
+      },
     },
   });
 }
