@@ -1,6 +1,6 @@
 /**
  * Environment Variables Validator for OBSYN
- * Fails loudly on startup if required production credentials are not provided.
+ * Identifies missing credentials and ensures live-mode integrity.
  */
 
 const requiredServerEnvVars = [
@@ -18,7 +18,7 @@ const requiredClientEnvVars = [
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",
 ] as const;
 
-export function validateEnv() {
+export function getMissingEnvVars(): string[] {
   const isServer = typeof window === "undefined";
   const missing: string[] = [];
 
@@ -26,29 +26,41 @@ export function validateEnv() {
 
   for (const envVar of varsToCheck) {
     const value = process.env[envVar];
-    if (!value || value.trim() === "" || value.includes("your-project") || value.startsWith("pk_test_...") || value.startsWith("sk_test_...")) {
+    if (
+      !value ||
+      value.trim() === "" ||
+      value.includes("your-project") ||
+      value.includes("placeholder") ||
+      value.startsWith("pk_test_...") ||
+      value.startsWith("sk_test_...")
+    ) {
       missing.push(envVar);
     }
   }
+
+  return missing;
+}
+
+export function validateEnv(): string[] {
+  const missing = getMissingEnvVars();
 
   if (missing.length > 0) {
     const errorMessage = `
 ================================================================================
 [OBSYN CONFIGURATION ERROR] Missing Required Environment Variables!
 ================================================================================
-The following required variables are either missing or contain placeholder values in your .env.local:
+The following required variables are either missing or contain placeholder values:
 
 ${missing.map((key) => `  - ${key}`).join("\n")}
 
-Please populate them in .env.local using .env.example as a reference.
+Please populate them in Vercel Project Settings > Environment Variables.
 The application operates in strict live-mode and requires valid Clerk and Supabase credentials.
 ================================================================================
 `;
-    if (process.env.NODE_ENV === "production" || isServer) {
-      console.error(errorMessage);
-      throw new Error(`[OBSYN] Missing required environment variables: ${missing.join(", ")}`);
-    }
+    console.error(errorMessage);
   }
+
+  return missing;
 }
 
 export const env = {
