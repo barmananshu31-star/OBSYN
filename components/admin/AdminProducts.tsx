@@ -9,8 +9,11 @@ import { formatCurrency } from "@/lib/utils";
 export function AdminProducts() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tableError, setTableError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -29,14 +32,18 @@ export function AdminProducts() {
 
   const fetchProducts = async () => {
     setLoading(true);
+    setTableError(null);
     try {
       const res = await fetch("/api/admin/products");
+      const data = await res.json();
       if (res.ok) {
-        const data = await res.json();
         setProducts(data.products || []);
+      } else {
+        setTableError(data.error || "Failed to load products from database.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch products:", err);
+      setTableError(err.message || "Failed to connect to server.");
     } finally {
       setLoading(false);
     }
@@ -48,6 +55,7 @@ export function AdminProducts() {
 
   const handleOpenAdd = () => {
     setEditingProduct(null);
+    setSubmitError(null);
     setFormData({
       name: "",
       slug: "",
@@ -66,6 +74,7 @@ export function AdminProducts() {
 
   const handleOpenEdit = (product: Product) => {
     setEditingProduct(product);
+    setSubmitError(null);
     setFormData({
       name: product.name,
       slug: product.slug,
@@ -88,14 +97,20 @@ export function AdminProducts() {
       const res = await fetch(`/api/admin/products?id=${id}`, { method: "DELETE" });
       if (res.ok) {
         setProducts(products.filter((p) => p.id !== id));
+      } else {
+        const data = await res.json();
+        alert(`Failed to delete product: ${data.error || "Unknown error"}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error deleting product:", err);
+      alert(`Error deleting product: ${err.message}`);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    setSubmitError(null);
 
     const payload = {
       name: formData.name,
@@ -112,29 +127,29 @@ export function AdminProducts() {
     };
 
     try {
-      if (editingProduct) {
-        const res = await fetch("/api/admin/products", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: editingProduct.id, ...payload }),
-        });
-        if (res.ok) {
-          setShowModal(false);
-          fetchProducts();
-        }
+      const url = "/api/admin/products";
+      const method = editingProduct ? "PUT" : "POST";
+      const body = editingProduct ? { id: editingProduct.id, ...payload } : payload;
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setShowModal(false);
+        fetchProducts();
       } else {
-        const res = await fetch("/api/admin/products", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (res.ok) {
-          setShowModal(false);
-          fetchProducts();
-        }
+        setSubmitError(data.error || "Failed to save product. Please verify database setup.");
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error saving product:", err);
+      setSubmitError(err.message || "Network error while saving product.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -158,6 +173,18 @@ export function AdminProducts() {
           <span>Add New Silhouette</span>
         </button>
       </div>
+
+      {tableError && (
+        <div className="p-4 bg-red-950/40 border border-red-500/40 rounded-lg text-red-300 text-xs space-y-1">
+          <div className="font-bold uppercase tracking-wider text-red-400">Database Error Encountered</div>
+          <div className="font-mono">{tableError}</div>
+          {tableError.includes("does not exist") && (
+            <div className="text-[11px] text-[#aaaaaa] pt-1">
+              Hint: The database schema has not been executed yet. Run <code className="bg-black/60 px-1 py-0.5 rounded text-white">supabase/schema.sql</code> in your Supabase SQL Editor.
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-[#0a0a0a] border border-white/10 rounded-xl overflow-hidden">
@@ -362,6 +389,18 @@ export function AdminProducts() {
                 </div>
               </div>
 
+              {submitError && (
+                <div className="p-3 bg-red-950/40 border border-red-500/40 rounded text-red-300 font-mono text-xs space-y-1">
+                  <div className="font-bold text-red-400">FAILED TO SAVE:</div>
+                  <div>{submitError}</div>
+                  {submitError.includes("does not exist") && (
+                    <div className="text-[11px] text-[#aaaaaa] pt-1">
+                      Run <code className="bg-black/60 px-1 py-0.5 rounded text-white">supabase/schema.sql</code> in your Supabase SQL Editor to create the tables.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-center gap-2 pt-2">
                 <input
                   type="checkbox"
@@ -378,16 +417,19 @@ export function AdminProducts() {
               <div className="flex justify-end gap-3 pt-4 border-t border-white/10">
                 <button
                   type="button"
+                  disabled={submitting}
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-xs uppercase tracking-widest text-[#888888] hover:text-white"
+                  className="px-4 py-2 text-xs uppercase tracking-widest text-[#888888] hover:text-white disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-6 py-2 bg-white text-black text-xs font-bold uppercase tracking-widest rounded hover:bg-[#d4ff00] transition-colors"
+                  disabled={submitting}
+                  className="px-6 py-2 bg-white text-black text-xs font-bold uppercase tracking-widest rounded hover:bg-[#d4ff00] transition-colors flex items-center gap-2 disabled:opacity-50"
                 >
-                  {editingProduct ? "Update Silhouette" : "Create Silhouette"}
+                  {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  <span>{editingProduct ? "Update Silhouette" : "Create Silhouette"}</span>
                 </button>
               </div>
             </form>
