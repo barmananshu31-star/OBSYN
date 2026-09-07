@@ -272,14 +272,17 @@ VALUES ('custom-designs', 'custom-designs', true)
 ON CONFLICT (id) DO NOTHING;
 
 -- Public read for product images
+DROP POLICY IF EXISTS "Public Read Product Images" ON storage.objects;
 CREATE POLICY "Public Read Product Images" ON storage.objects
     FOR SELECT USING (bucket_id = 'product-images');
 
 -- Public read for custom designs
+DROP POLICY IF EXISTS "Public Read Custom Designs" ON storage.objects;
 CREATE POLICY "Public Read Custom Designs" ON storage.objects
     FOR SELECT USING (bucket_id = 'custom-designs');
 
 -- Service role full control of storage
+DROP POLICY IF EXISTS "Service Role Full Storage" ON storage.objects;
 CREATE POLICY "Service Role Full Storage" ON storage.objects
     FOR ALL TO service_role USING (true) WITH CHECK (true);
 
