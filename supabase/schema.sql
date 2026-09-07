@@ -261,6 +261,31 @@ END;
 $$;
 
 -- =================================================================
+-- TABLE PRIVILEGES & ROLE GRANTS (Required for PostgREST / Supabase API)
+-- =================================================================
+
+-- 1. Schema usage
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+
+-- 2. Service role has full permissions across all tables, sequences, and routines
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT ALL PRIVILEGES ON ALL ROUTINES IN SCHEMA public TO service_role;
+
+-- 3. Public / Anon / Authenticated roles can read products and active sales
+GRANT SELECT ON TABLE public.products TO anon, authenticated;
+GRANT SELECT ON TABLE public.sales TO anon, authenticated;
+
+-- 4. Grant execute on stored procedure to service_role
+GRANT EXECUTE ON FUNCTION public.place_order TO service_role;
+
+-- 5. Ensure future tables and functions automatically inherit these permissions
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO anon, authenticated;
+
+-- =================================================================
 -- STORAGE BUCKETS SETUP (Run in Supabase dashboard or storage API)
 -- =================================================================
 INSERT INTO storage.buckets (id, name, public)
